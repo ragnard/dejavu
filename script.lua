@@ -60,43 +60,29 @@ end
 -- wrk script
 
 local thread_id_counter = 1
-local threads = {}
 
 function setup(thread)
    thread:set("thread_id", thread_id_counter)
-   table.insert(threads, thread)
-   -- update all known theads with the latest thread count
-   for _, t in ipairs(threads) do
-      t:set("thread_count", thread_id_counter)
-   end
    thread_id_counter = thread_id_counter + 1
 end
 
 function init(args)
-   print(string.format("thread %d of %d", thread_id, thread_count))
+   local path = args[1]
+
+   local usable_record = function(record)
+      return record.method == 'GET'
+   end
+
+   requests = {}
+   for record in filter(usable_record, access_log.records(path)) do
+      table.insert(requests, wrk.format(record.method, record.path))
+   end
+   request_count = table.getn(requests)
+   request_index = 0
+   print(string.format("Thread %d loaded %d requests from %s", thread_id, request_count, path))
 end
 
--- function init(args)
---    local path = args[1]
-   
---    local usable_record = function(record)
---       return record.method == 'GET'
---    end
-
---    requests = {}
---    for record in filter(usable_record, access_log.records(path)) do
---       table.insert(requests, wrk.format(record.method, record.path))
---    end
---    request_count = table.getn(requests)
---    --print(string.format("Thread %d loaded %d requests from %s", thread_id, request_count, path))
--- end
-
-
--- request = function()
---    if (not request_index || request_index > request_count then request_index = thread_id end
---    r = requests[request_index]
---    print(string.format("thread: %d, index: %d", thread_id, request_index))
---    request_index = request_index + thread_count
---    return r
--- end
-
+function request()
+   request_index = (request_index + 1) % request_count
+   return requests[request_index]
+end
